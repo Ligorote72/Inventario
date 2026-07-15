@@ -1,11 +1,12 @@
 import React from 'react';
 import { supabase } from '../supabaseClient';
 
-const Sidebar = ({ activeTab, setActiveTab, session }) => {
+const Sidebar = ({ activeTab, setActiveTab, session, settings }) => {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'inventory', label: 'Inventario', icon: '📦' },
     { id: 'history', label: 'Historial', icon: '📋' },
+    { id: 'settings', label: 'Configuración', icon: '⚙️' },
   ];
 
   const handleLogout = async () => {
@@ -17,7 +18,7 @@ const Sidebar = ({ activeTab, setActiveTab, session }) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <span style={{ fontSize: '1.8rem' }}>⚡</span> InvPro
+        <span style={{ fontSize: '1.8rem' }}>⚡</span> {settings?.company_name || 'InvPro'}
       </div>
       <nav className="nav-links">
         {tabs.map(tab => (

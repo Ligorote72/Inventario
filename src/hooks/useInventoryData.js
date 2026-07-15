@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 export function useInventoryData(session) {
   const [inventory, setInventory] = useState([]);
   const [movements, setMovements] = useState([]);
+  const [settings, setSettings] = useState({ company_name: 'InvPro', background_url: '' });
 
   useEffect(() => {
     if (session?.user) {
@@ -11,6 +12,7 @@ export function useInventoryData(session) {
     } else {
       setInventory([]);
       setMovements([]);
+      setSettings({ company_name: 'InvPro', background_url: '' });
     }
   }, [session]);
 
@@ -60,6 +62,22 @@ export function useInventoryData(session) {
         date: m.date
       }));
       setMovements(formattedMovements);
+    }
+
+    // Fetch settings
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .single();
+      
+    if (settingsError && settingsError.code !== 'PGRST116') {
+      console.error('Error fetching settings:', settingsError);
+    } else if (settingsData) {
+      setSettings({
+        company_name: settingsData.company_name || 'InvPro',
+        background_url: settingsData.background_url || ''
+      });
     }
   };
 
@@ -196,13 +214,35 @@ export function useInventoryData(session) {
     }
   };
 
+  const updateSettings = async (newSettings) => {
+    // Optimistic UI update
+    setSettings(prev => ({ ...prev, ...newSettings }));
+
+    // DB upsert
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: session.user.id,
+        company_name: newSettings.company_name,
+        background_url: newSettings.background_url,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+    if (error) {
+      console.error('Error updating settings:', error);
+      fetchData(); // Rollback on error
+    }
+  };
+
   return {
     inventory,
     movements,
+    settings,
     addProduct,
     updateProduct,
     deleteProduct,
     updateQuantity,
     clearMovements,
+    updateSettings
   };
 }
