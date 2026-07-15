@@ -5,8 +5,8 @@ import DashboardSummary from './components/DashboardSummary';
 import MovementHistory from './components/MovementHistory';
 import { useInventoryData } from './hooks/useInventoryData';
 
-function App() {
-  const { inventory, movements, addProduct, updateProduct, deleteProduct, updateQuantity, clearMovements } = useInventoryData();
+function App({ session }) {
+  const { inventory, movements, addProduct, updateProduct, deleteProduct, updateQuantity, clearMovements } = useInventoryData(session);
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const pageTitles = {
@@ -19,7 +19,7 @@ function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} session={session} />
       
       <main className="main-content">
         <header className="page-header">

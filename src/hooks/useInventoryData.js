@@ -1,51 +1,147 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 
-export function useInventoryData() {
-  const [inventory, setInventory] = useState(() => {
-    const saved = localStorage.getItem('basic-inventory-data');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [movements, setMovements] = useState(() => {
-    const saved = localStorage.getItem('basic-inventory-movements');
-    return saved ? JSON.parse(saved) : [];
-  });
+export function useInventoryData(session) {
+  const [inventory, setInventory] = useState([]);
+  const [movements, setMovements] = useState([]);
 
   useEffect(() => {
-    localStorage.setItem('basic-inventory-data', JSON.stringify(inventory));
-  }, [inventory]);
+    if (session?.user) {
+      fetchData();
+    } else {
+      setInventory([]);
+      setMovements([]);
+    }
+  }, [session]);
 
-  useEffect(() => {
-    localStorage.setItem('basic-inventory-movements', JSON.stringify(movements));
-  }, [movements]);
+  const fetchData = async () => {
+    // Fetch products
+    const { data: productsData, error: productsError } = await supabase
+      .from('products')
+      .select('*')
+      .order('date_added', { ascending: false });
+    
+    if (productsError) {
+      console.error('Error fetching products:', productsError);
+    } else {
+      // Map database snake_case to frontend camelCase
+      const formattedProducts = productsData.map(p => ({
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        category: p.category,
+        quantity: Number(p.quantity),
+        costPrice: Number(p.cost_price),
+        salePrice: Number(p.sale_price),
+        minStock: Number(p.min_stock),
+        dateAdded: p.date_added,
+        lastUpdated: p.last_updated
+      }));
+      setInventory(formattedProducts);
+    }
 
-  const addProduct = (product) => {
+    // Fetch movements
+    const { data: movementsData, error: movementsError } = await supabase
+      .from('movements')
+      .select('*')
+      .order('date', { ascending: false });
+    
+    if (movementsError) {
+      console.error('Error fetching movements:', movementsError);
+    } else {
+      const formattedMovements = movementsData.map(m => ({
+        id: m.id,
+        productId: m.product_id,
+        productName: m.product_name,
+        sku: m.sku,
+        type: m.type,
+        quantity: Number(m.quantity),
+        unitPrice: Number(m.unit_price),
+        date: m.date
+      }));
+      setMovements(formattedMovements);
+    }
+  };
+
+  const addProduct = async (product) => {
+    // Optimistic UI update
     setInventory(prev => [product, ...prev]);
+
+    // DB insert
+    const { error } = await supabase.from('products').insert([{
+      id: product.id,
+      user_id: session.user.id,
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      quantity: product.quantity,
+      cost_price: product.costPrice,
+      sale_price: product.salePrice,
+      min_stock: product.minStock,
+      date_added: product.dateAdded || new Date().toISOString()
+    }]);
+
+    if (error) {
+      console.error('Error adding product:', error);
+      fetchData(); // Rollback on error
+    }
   };
 
-  const updateProduct = (id, updates) => {
+  const updateProduct = async (id, updates) => {
+    // Optimistic UI update
     setInventory(prev => prev.map(item => (item.id === id ? { ...item, ...updates } : item)));
+
+    // DB update
+    const dbUpdates = { last_updated: new Date().toISOString() };
+    if (updates.sku !== undefined) dbUpdates.sku = updates.sku;
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if (updates.quantity !== undefined) dbUpdates.quantity = updates.quantity;
+    if (updates.costPrice !== undefined) dbUpdates.cost_price = updates.costPrice;
+    if (updates.salePrice !== undefined) dbUpdates.sale_price = updates.salePrice;
+    if (updates.minStock !== undefined) dbUpdates.min_stock = updates.minStock;
+
+    const { error } = await supabase
+      .from('products')
+      .update(dbUpdates)
+      .eq('id', id)
+      .eq('user_id', session.user.id);
+      
+    if (error) {
+      console.error('Error updating product:', error);
+      fetchData(); // Rollback on error
+    }
   };
 
-  const deleteProduct = (id) => {
+  const deleteProduct = async (id) => {
+    // Optimistic UI update
     setInventory(prev => prev.filter(item => item.id !== id));
+
+    // DB delete
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', session.user.id);
+      
+    if (error) {
+      console.error('Error deleting product:', error);
+      fetchData(); // Rollback on error
+    }
   };
 
-  /**
-   * @param {string} id - Product ID
-   * @param {number} delta - Positive = buy/entry, Negative = sell/exit
-   * @param {object} meta - { productName, sku, unitPrice } 
-   */
-  const updateQuantity = (id, delta, meta = {}) => {
-    setInventory(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = Math.max(0, item.quantity + delta);
-        return { ...item, quantity: newQty, lastUpdated: new Date().toISOString() };
-      }
-      return item;
-    }));
+  const updateQuantity = async (id, delta, meta = {}) => {
+    // Find current product in state to get its current quantity
+    const product = inventory.find(item => item.id === id);
+    if (!product) return;
+    
+    const newQty = Math.max(0, product.quantity + delta);
 
-    // Register movement in history
+    // Optimistic UI update
+    setInventory(prev => prev.map(item => 
+      item.id === id ? { ...item, quantity: newQty, lastUpdated: new Date().toISOString() } : item
+    ));
+
     const movement = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
@@ -57,11 +153,46 @@ export function useInventoryData() {
       unitPrice: meta.unitPrice || 0,
     };
     setMovements(prev => [movement, ...prev]);
+
+    // DB updates
+    const { error: pError } = await supabase
+      .from('products')
+      .update({ quantity: newQty, last_updated: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', session.user.id);
+      
+    if (pError) console.error('Error updating product quantity:', pError);
+
+    const { error: mError } = await supabase.from('movements').insert([{
+      id: movement.id,
+      user_id: session.user.id,
+      product_id: movement.productId,
+      product_name: movement.productName,
+      sku: movement.sku,
+      type: movement.type,
+      quantity: movement.quantity,
+      unit_price: movement.unitPrice,
+      date: movement.date
+    }]);
+
+    if (mError) {
+      console.error('Error adding movement:', mError);
+      fetchData(); // Rollback on error
+    }
   };
 
-  const clearMovements = () => {
-    if (window.confirm('¿Eliminar todo el historial de movimientos? Esta acción no se puede deshacer.')) {
+  const clearMovements = async () => {
+    if (window.confirm('¿Eliminar todo el historial de movimientos de la base de datos? Esta acción no se puede deshacer.')) {
       setMovements([]);
+      const { error } = await supabase
+        .from('movements')
+        .delete()
+        .eq('user_id', session.user.id); // Delete all movements for this user
+
+      if (error) {
+        console.error('Error clearing movements:', error);
+        fetchData(); // Rollback on error
+      }
     }
   };
 
