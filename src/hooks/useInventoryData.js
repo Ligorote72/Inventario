@@ -6,6 +6,8 @@ export function useInventoryData(session) {
   const [inventory, setInventory] = useState([]);
   const [movements, setMovements] = useState([]);
   const [settings, setSettings] = useState({ company_name: 'InvPro', background_url: '' });
+  const [userRole, setUserRole] = useState('admin');
+  const [ownerId, setOwnerId] = useState(null);
 
   useEffect(() => {
     if (session?.user) {
@@ -18,10 +20,30 @@ export function useInventoryData(session) {
   }, [session]);
 
   const fetchData = async () => {
+    if (!session?.user) return;
+
+    // Determine Role & Owner ID
+    let currentOwnerId = session.user.id;
+    let currentRole = 'admin';
+
+    const { data: employeeData } = await supabase
+      .from('employees')
+      .select('*')
+      .eq('email', session.user.email)
+      .maybeSingle();
+
+    if (employeeData) {
+      currentOwnerId = employeeData.owner_id;
+      currentRole = employeeData.role;
+    }
+    setOwnerId(currentOwnerId);
+    setUserRole(currentRole);
+
     // Fetch products
     const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select('*')
+      .eq('user_id', currentOwnerId)
       .order('date_added', { ascending: false });
     
     if (productsError) {
@@ -47,6 +69,7 @@ export function useInventoryData(session) {
     const { data: movementsData, error: movementsError } = await supabase
       .from('movements')
       .select('*')
+      .eq('user_id', currentOwnerId)
       .order('date', { ascending: false });
     
     if (movementsError) {
@@ -60,6 +83,7 @@ export function useInventoryData(session) {
         type: m.type,
         quantity: Number(m.quantity),
         unitPrice: Number(m.unit_price),
+        customerName: m.customer_name,
         date: m.date
       }));
       setMovements(formattedMovements);
@@ -69,7 +93,7 @@ export function useInventoryData(session) {
     const { data: settingsData, error: settingsError } = await supabase
       .from('user_settings')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', currentOwnerId)
       .single();
       
     if (settingsError && settingsError.code !== 'PGRST116') {
@@ -89,7 +113,7 @@ export function useInventoryData(session) {
     // DB insert
     const { error } = await supabase.from('products').insert([{
       id: product.id,
-      user_id: session.user.id,
+      user_id: ownerId || session.user.id,
       sku: product.sku,
       name: product.name,
       category: product.category,
@@ -127,7 +151,7 @@ export function useInventoryData(session) {
       .from('products')
       .update(dbUpdates)
       .eq('id', id)
-      .eq('user_id', session.user.id);
+      .eq('user_id', ownerId || session.user.id);
       
     if (error) {
       console.error('Error updating product:', error);
@@ -147,7 +171,7 @@ export function useInventoryData(session) {
       .from('products')
       .delete()
       .eq('id', id)
-      .eq('user_id', session.user.id);
+      .eq('user_id', ownerId || session.user.id);
       
     if (error) {
       console.error('Error deleting product:', error);
@@ -179,6 +203,7 @@ export function useInventoryData(session) {
       type: delta > 0 ? 'buy' : 'sell',
       quantity: Math.abs(delta),
       unitPrice: meta.unitPrice || 0,
+      customerName: meta.customerName || null
     };
     setMovements(prev => [movement, ...prev]);
 
@@ -187,7 +212,7 @@ export function useInventoryData(session) {
       .from('products')
       .update({ quantity: newQty, last_updated: new Date().toISOString() })
       .eq('id', id)
-      .eq('user_id', session.user.id);
+      .eq('user_id', ownerId || session.user.id);
       
     if (pError) {
       console.error('Error updating product quantity:', pError);
@@ -196,13 +221,14 @@ export function useInventoryData(session) {
 
     const { error: mError } = await supabase.from('movements').insert([{
       id: movement.id,
-      user_id: session.user.id,
+      user_id: ownerId || session.user.id,
       product_id: movement.productId,
       product_name: movement.productName,
       sku: movement.sku,
       type: movement.type,
       quantity: movement.quantity,
       unit_price: movement.unitPrice,
+      customer_name: movement.customerName,
       date: movement.date
     }]);
 
@@ -219,7 +245,7 @@ export function useInventoryData(session) {
       const { error } = await supabase
         .from('movements')
         .delete()
-        .eq('user_id', session.user.id); // Delete all movements for this user
+        .eq('user_id', ownerId || session.user.id); // Delete all movements for this owner
 
       if (error) {
         console.error('Error clearing movements:', error);
@@ -255,6 +281,8 @@ export function useInventoryData(session) {
     inventory,
     movements,
     settings,
+    userRole,
+    ownerId,
     addProduct,
     updateProduct,
     deleteProduct,

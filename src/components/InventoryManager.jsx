@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
+import { generateReceiptPDF } from '../utils/pdfGenerator';
 
-const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct, updateQuantity }) => {
+const InventoryManager = ({ inventory, userRole, settings, addProduct, updateProduct, deleteProduct, updateQuantity }) => {
   const [searchQuery, setSearchQuery] = useState('');
   
   // Product Modal State
@@ -11,7 +12,7 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
   });
 
   // Movement Modal State
-  const [movementModal, setMovementModal] = useState({ isOpen: false, item: null, type: 'buy', qty: '' });
+  const [movementModal, setMovementModal] = useState({ isOpen: false, item: null, type: 'buy', qty: '', customerName: '' });
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('es-CO', {
@@ -75,7 +76,7 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
 
   // Movements (Buy/Sell)
   const openMovement = (item, type) => {
-    setMovementModal({ isOpen: true, item, type, qty: '' });
+    setMovementModal({ isOpen: true, item, type, qty: '', customerName: '' });
   };
 
   const handleMovementSubmit = (e) => {
@@ -93,8 +94,22 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
       productName: item.name,
       sku: item.sku || null,
       unitPrice,
+      customerName: type === 'sell' ? movementModal.customerName : null
     });
-    setMovementModal({ isOpen: false, item: null, type: 'buy', qty: '' });
+
+    if (type === 'sell' && window.confirm('¿Generar e imprimir recibo PDF para esta venta?')) {
+      const movementMock = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        quantity: qty,
+        productName: item.name,
+        unitPrice,
+        customerName: movementModal.customerName
+      };
+      generateReceiptPDF(movementMock, settings);
+    }
+
+    setMovementModal({ isOpen: false, item: null, type: 'buy', qty: '', customerName: '' });
   };
 
   const filteredInventory = useMemo(() => {
@@ -117,9 +132,11 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{ maxWidth: '400px', margin: 0 }}
         />
-        <button onClick={() => openModal()} className="btn btn-primary">
-          + Nuevo Producto
-        </button>
+        {userRole === 'admin' && (
+          <button onClick={() => openModal()} className="btn btn-primary">
+            + Nuevo Producto
+          </button>
+        )}
       </div>
 
       <div className="glass-card">
@@ -136,10 +153,11 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
                 <tr>
                   <th>SKU / Nombre</th>
                   <th>Stock</th>
-                  <th>Costo / Venta</th>
-                  <th>Ganancia c/u</th>
+                  {userRole === 'admin' && <th>Costo / Venta</th>}
+                  {userRole === 'admin' && <th>Ganancia c/u</th>}
+                  {userRole === 'vendedor' && <th>Precio Venta</th>}
                   <th>Movimientos</th>
-                  <th>Opciones</th>
+                  {userRole === 'admin' && <th>Opciones</th>}
                 </tr>
               </thead>
               <tbody>
@@ -166,15 +184,23 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
                         </span>
                         {isLowStock && <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '4px' }}>Stock Bajo</div>}
                       </td>
-                      <td>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Costo: {formatCurrency(cost)}</div>
-                        <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Venta: {formatCurrency(sale)}</div>
-                      </td>
-                      <td>
-                        <span className="badge badge-normal" style={{ fontSize: '0.9rem' }}>
-                          {formatCurrency(profit)}
-                        </span>
-                      </td>
+                      {userRole === 'admin' ? (
+                        <>
+                          <td>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Costo: {formatCurrency(cost)}</div>
+                            <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Venta: {formatCurrency(sale)}</div>
+                          </td>
+                          <td>
+                            <span className="badge badge-normal" style={{ fontSize: '0.9rem' }}>
+                              {formatCurrency(profit)}
+                            </span>
+                          </td>
+                        </>
+                      ) : (
+                        <td>
+                          <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{formatCurrency(sale)}</div>
+                        </td>
+                      )}
                       <td>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                           <button onClick={() => openMovement(item, 'sell')} className="btn" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)' }}>
@@ -185,12 +211,14 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
                           </button>
                         </div>
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button onClick={() => openModal(item)} className="btn btn-icon btn-edit" title="Editar Detalles">✏️</button>
-                          <button onClick={() => handleDelete(item.id)} className="btn btn-icon" title="Eliminar">🗑️</button>
-                        </div>
-                      </td>
+                      {userRole === 'admin' && (
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button onClick={() => openModal(item)} className="btn btn-icon btn-edit" title="Editar Detalles">✏️</button>
+                            <button onClick={() => handleDelete(item.id)} className="btn btn-icon" title="Eliminar">🗑️</button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -223,6 +251,17 @@ const InventoryManager = ({ inventory, addProduct, updateProduct, deleteProduct,
                   autoFocus
                 />
               </div>
+              {movementModal.type === 'sell' && (
+                <div className="form-group">
+                  <label>Nombre del Cliente (Opcional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ej: Juan Pérez"
+                    value={movementModal.customerName} 
+                    onChange={e => setMovementModal({...movementModal, customerName: e.target.value})} 
+                  />
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                 <button type="button" onClick={() => setMovementModal({ isOpen: false, item: null, type: 'buy', qty: '' })} className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)', color: 'white' }}>
                   Cancelar

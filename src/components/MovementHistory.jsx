@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { exportToCSV, formatMovementsForExport } from '../utils/exportUtils';
+import { generateReceiptPDF } from '../utils/pdfGenerator';
 
-const MovementHistory = ({ movements, clearMovements }) => {
+const MovementHistory = ({ movements, userRole, settings, clearMovements }) => {
   const [filter, setFilter] = useState('all'); // 'all' | 'buy' | 'sell'
 
   const formatCurrency = (val) =>
@@ -83,9 +84,11 @@ const MovementHistory = ({ movements, clearMovements }) => {
           <button onClick={handleExport} className="btn" style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--accent)', fontSize: '0.85rem', padding: '0.5rem 1.2rem' }}>
             ⬇️ Exportar CSV
           </button>
-          <button onClick={clearMovements} className="btn" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', fontSize: '0.85rem', padding: '0.5rem 1.2rem' }}>
-            🗑️ Limpiar
-          </button>
+          {userRole === 'admin' && (
+            <button onClick={clearMovements} className="btn" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', fontSize: '0.85rem', padding: '0.5rem 1.2rem' }}>
+              🗑️ Limpiar
+            </button>
+          )}
         </div>
       </div>
 
@@ -108,6 +111,7 @@ const MovementHistory = ({ movements, clearMovements }) => {
                   <th>Cantidad</th>
                   <th>Precio Unitario</th>
                   <th>Total</th>
+                  <th style={{ width: '80px', textAlign: 'center' }}>PDF</th>
                 </tr>
               </thead>
               <tbody>
@@ -129,6 +133,7 @@ const MovementHistory = ({ movements, clearMovements }) => {
                     <td>
                       <div style={{ fontWeight: 600 }}>{m.productName}</div>
                       {m.sku && <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{m.sku}</div>}
+                      {m.customerName && <div style={{ fontSize: '0.75rem', color: 'var(--accent)', marginTop: '2px' }}>👤 {m.customerName}</div>}
                     </td>
                     <td>
                       <span style={{ fontWeight: 700, fontSize: '1.1rem', color: m.type === 'buy' ? 'var(--success)' : 'var(--danger)' }}>
@@ -137,6 +142,18 @@ const MovementHistory = ({ movements, clearMovements }) => {
                     </td>
                     <td style={{ color: 'var(--text-dim)' }}>{formatCurrency(m.unitPrice)}</td>
                     <td style={{ fontWeight: 700 }}>{formatCurrency(m.quantity * m.unitPrice)}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {m.type === 'sell' && (
+                        <button 
+                          onClick={() => generateReceiptPDF(m, settings)} 
+                          className="btn-icon" 
+                          title="Descargar Recibo"
+                          style={{ padding: '0.4rem' }}
+                        >
+                          📄
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

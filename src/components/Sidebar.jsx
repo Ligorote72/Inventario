@@ -1,13 +1,18 @@
 import React from 'react';
 import { supabase } from '../supabaseClient';
 
-const Sidebar = ({ activeTab, setActiveTab, session, settings }) => {
-  const tabs = [
+const Sidebar = ({ activeTab, setActiveTab, session, settings, userRole }) => {
+  let tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'inventory', label: 'Inventario', icon: '📦' },
     { id: 'history', label: 'Historial', icon: '📋' },
+    { id: 'team', label: 'Equipo', icon: '👥' },
     { id: 'settings', label: 'Configuración', icon: '⚙️' },
   ];
+
+  if (userRole === 'vendedor') {
+    tabs = tabs.filter(t => t.id === 'inventory' || t.id === 'history');
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -46,7 +51,7 @@ const Sidebar = ({ activeTab, setActiveTab, session, settings }) => {
               )}
               <div style={{ overflow: 'hidden' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                  {user.full_name || 'Usuario'}
+                  {user.full_name || 'Usuario'} <span style={{ fontSize: '0.7rem', color: 'var(--primary)', marginLeft: 4, textTransform: 'uppercase' }}>({userRole})</span>
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                   {session.user.email}
