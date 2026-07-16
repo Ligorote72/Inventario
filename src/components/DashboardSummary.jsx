@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid
+  PieChart, Pie, Cell, Legend, AreaChart, Area, CartesianGrid
 } from 'recharts';
 import { exportToCSV, formatInventoryForExport } from '../utils/exportUtils';
 
@@ -10,10 +10,10 @@ const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'
 const CustomTooltipBar = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: '#1a1a1e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '0.75rem 1rem' }}>
-      <p style={{ color: '#94a3b8', marginBottom: 4, fontSize: '0.8rem' }}>{label}</p>
+    <div style={{ background: 'var(--surface-color)', backdropFilter: 'blur(20px)', border: '1px solid var(--surface-border)', borderRadius: 16, padding: '1rem', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+      <p style={{ color: '#94a3b8', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600, textTransform: 'uppercase' }}>{label}</p>
       {payload.map((p, i) => (
-        <p key={i} style={{ color: p.color, fontWeight: 700 }}>
+        <p key={i} style={{ color: p.color, fontWeight: 700, fontSize: '0.95rem' }}>
           {p.name}: {typeof p.value === 'number' && p.name.includes('$')
             ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(p.value)
             : p.value}
@@ -68,6 +68,24 @@ const DashboardSummary = ({ inventory, movements = [] }) => {
 
   return (
     <div>
+      {/* ── Gradients Defs ─────────────────────────────────────────────────── */}
+      <svg style={{ height: 0, width: 0, position: 'absolute' }}>
+        <defs>
+          <linearGradient id="colorPrimary" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.8}/>
+            <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.2}/>
+          </linearGradient>
+          <linearGradient id="colorEntrada" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+            <stop offset="95%" stopColor="#10b981" stopOpacity={0.2}/>
+          </linearGradient>
+          <linearGradient id="colorSalida" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.2}/>
+          </linearGradient>
+        </defs>
+      </svg>
+
       {/* ── Stat Cards ─────────────────────────────────────────────────────── */}
       <div className="dashboard-stats">
         <div className="stat-card" style={{ '--primary': 'var(--primary)' }}>
@@ -105,8 +123,8 @@ const DashboardSummary = ({ inventory, movements = [] }) => {
                 <XAxis dataKey="categoria" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltipBar />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                <Bar dataKey="unidades" name="Unidades" radius={[6, 6, 0, 0]}>
-                  {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                <Bar dataKey="unidades" name="Unidades" radius={[6, 6, 0, 0]} fill="url(#colorPrimary)">
+                  {categoryData.map((_, i) => <Cell key={i} fill={`url(#colorPrimary)`} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -125,9 +143,9 @@ const DashboardSummary = ({ inventory, movements = [] }) => {
                   </Pie>
                   <Tooltip
                     formatter={(value) => [formatCurrency(value), 'Valor']}
-                    contentStyle={{ background: '#1a1a1e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10 }}
-                    labelStyle={{ color: '#94a3b8' }}
-                    itemStyle={{ color: '#f8fafc' }}
+                    contentStyle={{ background: 'var(--surface-color)', backdropFilter: 'blur(20px)', border: '1px solid var(--surface-border)', borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+                    labelStyle={{ color: '#94a3b8', fontWeight: 600 }}
+                    itemStyle={{ color: '#f8fafc', fontWeight: 700 }}
                   />
                   <Legend iconType="circle" iconSize={8} formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 11 }}>{v}</span>} />
                 </PieChart>
@@ -146,15 +164,15 @@ const DashboardSummary = ({ inventory, movements = [] }) => {
             📈 Tendencia de Movimientos Recientes
           </h2>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={movementTrend} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+            <AreaChart data={movementTrend} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="index" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} label={{ value: 'Movimiento', position: 'insideBottom', fill: '#64748b', fontSize: 10 }} />
               <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltipBar />} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-              <Line type="monotone" dataKey="entrada" name="$ Entrada" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
-              <Line type="monotone" dataKey="salida" name="$ Salida" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} activeDot={{ r: 5 }} />
+              <Area type="monotone" dataKey="entrada" name="$ Entrada" stroke="#10b981" fillOpacity={1} fill="url(#colorEntrada)" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
+              <Area type="monotone" dataKey="salida" name="$ Salida" stroke="#ef4444" fillOpacity={1} fill="url(#colorSalida)" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} activeDot={{ r: 5 }} />
               <Legend iconType="circle" iconSize={8} formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 11 }}>{v}</span>} />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       )}

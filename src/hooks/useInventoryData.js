@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { toast } from 'sonner';
 
 export function useInventoryData(session) {
   const [inventory, setInventory] = useState([]);
@@ -101,7 +102,10 @@ export function useInventoryData(session) {
 
     if (error) {
       console.error('Error adding product:', error);
+      toast.error('Error al añadir producto');
       fetchData(); // Rollback on error
+    } else {
+      toast.success('Producto añadido correctamente');
     }
   };
 
@@ -127,7 +131,10 @@ export function useInventoryData(session) {
       
     if (error) {
       console.error('Error updating product:', error);
+      toast.error('Error al actualizar producto');
       fetchData(); // Rollback on error
+    } else {
+      toast.success('Producto actualizado');
     }
   };
 
@@ -144,7 +151,10 @@ export function useInventoryData(session) {
       
     if (error) {
       console.error('Error deleting product:', error);
+      toast.error('Error al eliminar producto');
       fetchData(); // Rollback on error
+    } else {
+      toast.success('Producto eliminado');
     }
   };
 
@@ -179,7 +189,10 @@ export function useInventoryData(session) {
       .eq('id', id)
       .eq('user_id', session.user.id);
       
-    if (pError) console.error('Error updating product quantity:', pError);
+    if (pError) {
+      console.error('Error updating product quantity:', pError);
+      toast.error('Error al actualizar inventario');
+    }
 
     const { error: mError } = await supabase.from('movements').insert([{
       id: movement.id,
@@ -200,6 +213,7 @@ export function useInventoryData(session) {
   };
 
   const clearMovements = async () => {
+    // Usamos toast customizado si quisieramos, pero window.confirm es bloqueante y más seguro para esto
     if (window.confirm('¿Eliminar todo el historial de movimientos de la base de datos? Esta acción no se puede deshacer.')) {
       setMovements([]);
       const { error } = await supabase
@@ -209,7 +223,10 @@ export function useInventoryData(session) {
 
       if (error) {
         console.error('Error clearing movements:', error);
+        toast.error('Error al vaciar historial');
         fetchData(); // Rollback on error
+      } else {
+        toast.success('Historial vaciado correctamente');
       }
     }
   };
